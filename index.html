@@ -2072,20 +2072,23 @@ function renderRecord() {
   const mdy = d => `${d.slice(5, 7)}/${d.slice(8, 10)}/${d.slice(2, 4)}`, n0 = v => String(v).replace(/\.0$/, "");
   const ended = r => (r.actual === "" || r.actual == null ? "–" : r.kind === "winner" || r.kind === "spread" ? (+r.actual > 0 ? `Won by ${n0(r.actual)}` : +r.actual < 0 ? `Lost by ${n0(-r.actual)}` : "Tied") : n0(r.actual));
   // Two lists: game lines (team bets tagged Send) and player props (rated High, with Medium switched in on request).
-  const list = (keep, cols, cells, src = R.days) => (src || []).map(d => { const mine = d.rows.filter(keep); if (!mine.length) return "";
-    return `<h4 style="margin:16px 0 0;font-size:15px">${mdy(d.date)}</h4>` + ["NBA", "WNBA"].map(lg => { const rows = mine.filter(r => r.league === lg);
-      return rows.length ? `<div class="src" style="margin:8px 0 6px"><b style="color:var(--ink)">${lg}</b> · ${tally(rows)}</div>` + tb(cols, rows.map(cells)) : ""; }).join(""); }).join("");
+  // Each day folds: the newest day in a list starts open, earlier days start closed and remember what was clicked.
+  const list = (keep, cols, cells, src = R.days, id = "d") => { let first = true; SL.recDay = SL.recDay || {};
+    return (src || []).map(d => { const mine = d.rows.filter(keep); if (!mine.length) return "";
+      const key = `${id}|${d.date}`, open = key in SL.recDay ? SL.recDay[key] : first; first = false;
+      return `<details class="rec-day" data-k="${key}"${open ? " open" : ""}><summary style="cursor:pointer;margin:16px 0 0;font-size:15px"><b>${mdy(d.date)}</b> <span class="src">· ${tally(mine)}</span></summary>` + ["NBA", "WNBA"].map(lg => { const rows = mine.filter(r => r.league === lg);
+        return rows.length ? `<div class="src" style="margin:8px 0 6px"><b style="color:var(--ink)">${lg}</b> · ${tally(rows)}</div>` + tb(cols, rows.map(cells)) : ""; }).join("") + `</details>`; }).join(""); };
   const pickCell = r => `<span class="${/^Over/.test(r.pick) ? "ov" : /^Under/.test(r.pick) ? "un" : ""}">${esc(r.pick).replace("-", "−")}</span>`;
   const games = list(r => r.kind !== "prop", ["Play", "Line", "Price", "Ended with", "Result"],
-    r => [`<b>${esc(r.play)}</b>${/ at /.test(r.play) ? "" : ` <span class="src">${esc(r.game)}</span>`}`, pickCell(r), showAm(r.price) || "no price", ended(r), tag(r.result)]);
+    r => [`<b>${esc(r.play)}</b>${/ at /.test(r.play) ? "" : ` <span class="src">${esc(r.game)}</span>`}`, pickCell(r), showAm(r.price) || "no price", ended(r), tag(r.result)], R.days, "g");
   const med = !!SL.recMed, props = list(r => r.kind === "prop" && (med || r.rating === "High"), ["Play", "Line", "Price", "Ended with", ...(med ? ["Rated"] : []), "Result"],
-    r => [`<b>${esc(r.play)}</b>`, pickCell(r), showAm(r.price) || "no price", ended(r), ...(med ? [`<span class="tag ${r.rating === "High" ? "l2" : "l1"}">${r.rating}</span>`] : []), tag(r.result)]);
+    r => [`<b>${esc(r.play)}</b>`, pickCell(r), showAm(r.price) || "no price", ended(r), ...(med ? [`<span class="tag ${r.rating === "High" ? "l2" : "l1"}">${r.rating}</span>`] : []), tag(r.result)], R.days, "p");
   const days = `<h3 style="margin-top:22px">Game lines</h3>` + (games || `<p class="empty">No game-line play has reached tip-off as a Send yet.</p>`) +
     `<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:28px"><h3 style="margin:0">Player props</h3>` +
     `<div class="seg" role="group" aria-label="Which props" id="rec-med"><button type="button" id="rm-0" data-m="0" aria-pressed="${!med}">High only</button><button type="button" id="rm-1" data-m="1" aria-pressed="${med}">High + Medium</button></div></div>` +
     (props || `<p class="empty">No prop has been rated ${med ? "High or Medium" : "High"} yet.</p>`) + (() => {
       // Study list: High conviction, but no sportsbook price, so never sent.
-      const st = list(() => true, ["Play", "Stand-in line", "Model", "Ended with", "Result"], r => [`<b>${esc(r.play)}</b>`, pickCell(r), `${(+r.chance).toFixed(0)}%`, ended(r), tag(r.result)], R.study), T = R.study_total || {};
+      const st = list(() => true, ["Play", "Stand-in line", "Model", "Ended with", "Result"], r => [`<b>${esc(r.play)}</b>`, pickCell(r), `${(+r.chance).toFixed(0)}%`, ended(r), tag(r.result)], R.study, "s"), T = R.study_total || {};
       return !st ? "" : `<h3 style="margin-top:28px">High conviction, not sent</h3><div class="src" style="margin-top:4px">For study only. The sportsbook had no price for these, so they were never on Best bets. The line is the model's own stand-in (the player's season and last-10 average), which is easier to beat than a real line.` +
         (T.bets ? ` So far: <b>${T.wins} of ${T.bets}</b> hit (${(100 * T.wins / T.bets).toFixed(0)}%) where the model said ${T.said}% on average.` : "") + `</div>` + st; })();
   const groups = cat.groups.map(g => ({ ...g, name: g.name.replace(/overs/, `<span class="ov">overs</span>`).replace(/unders/, `<span class="un">unders</span>`) }));
@@ -2110,7 +2113,8 @@ function renderRecord() {
 }
 $("rec-body").addEventListener("click", e => { const b = e.target.closest("#rec-cat button"); if (b) { SL.recCat = b.dataset.c; renderRecord(); } });
 $("rec-body").addEventListener("click", e => { const b = e.target.closest("#rec-med button"); if (b) { SL.recMed = b.dataset.m === "1"; renderRecord(); } });
-$("rec-body").addEventListener("toggle", e => { if (e.target.id === "rec-more") SL.recMore = e.target.open; }, true);
+$("rec-body").addEventListener("toggle", e => { if (e.target.id === "rec-more") SL.recMore = e.target.open;
+  else if (e.target.classList.contains("rec-day")) (SL.recDay = SL.recDay || {})[e.target.dataset.k] = e.target.open; }, true);
 renderRecord();
 /* ---------- NFL: this week's plays from the NFL model, with DraftKings' lines and where Venom agrees ---------- */
 const NFL_CATS = [["td", "Anytime TD"], ["pass", "Passing"], ["rec", "Receiving"], ["rush", "Rushing"]];
