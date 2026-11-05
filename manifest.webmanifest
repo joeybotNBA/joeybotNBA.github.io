@@ -1,6 +1,6 @@
 {
-  "name": "joeybotNBA",
-  "short_name": "joeybotNBA",
+  "name": "joeybot",
+  "short_name": "joeybot",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#0b1220",
